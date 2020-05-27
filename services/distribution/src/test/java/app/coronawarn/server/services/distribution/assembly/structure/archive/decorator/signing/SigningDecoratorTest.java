@@ -108,7 +108,7 @@ class SigningDecoratorTest {
     byte[] signatureBytes = signatureList.getSignaturesList().get(0).getSignature().toByteArray();
 
     Signature payloadSignature = Signature.getInstance("SHA256withECDSA", "BC");
-    payloadSignature.initVerify(cryptoProvider.getCertificate());
+    payloadSignature.initVerify(cryptoProvider.getPublicKey());
     payloadSignature.update(fileBytes);
     assertThat(payloadSignature.verify(signatureBytes)).isTrue();
   }

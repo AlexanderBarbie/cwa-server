@@ -156,7 +156,7 @@ public class DistributionServiceConfig {
   public static class Paths {
 
     private String privateKey;
-    private String certificate;
+    private String publicKey;
     private String output;
 
     public String getPrivateKey() {
@@ -167,12 +167,12 @@ public class DistributionServiceConfig {
       this.privateKey = privateKey;
     }
 
-    public String getCertificate() {
-      return certificate;
+    public String getPublicKey() {
+      return publicKey;
     }
 
-    public void setCertificate(String certificate) {
-      this.certificate = certificate;
+    public void setPublicKey(String publicKey) {
+      this.publicKey = publicKey;
     }
 
     public String getOutput() {

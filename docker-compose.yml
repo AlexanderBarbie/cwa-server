@@ -39,8 +39,8 @@ services:
       CWA_OBJECTSTORE_PORT: 8000
       services.distribution.paths.output: /tmp/distribution
       # Settings for cryptographic artefacts
-      VAULT_FILESIGNING_SECRET: ${SECRET_PRIVATE}
-      VAULT_FILESIGNING_CERT: ${SECRET_CERTIFICATE}
+      VAULT_FILESIGNING_PRIVATE_KEY: ${SECRET_PRIVATE}
+      VAULT_FILESIGNING_PUBLIC_KEY: ${SECRET_PUBLIC}
     volumes:
       - ./docker-compose-test-secrets:/secrets
   postgres:

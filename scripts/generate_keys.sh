@@ -17,7 +17,8 @@ generate_private_key()
   openssl ecparam                             \
     -name prime256v1                          \
     -genkey                                   \
-    -out "$1"
+    -out "$1"                                 \
+    -noout
 }
 
 # Extract the public key from the private key
