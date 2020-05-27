@@ -16,7 +16,6 @@ services:
     paths:
       output: out
       privatekey: ${VAULT_FILESIGNING_PRIVATE_KEY}
-      publickey: ${VAULT_FILESIGNING_PUBLIC_KEY}
     tek-export:
       file-name: export.bin
       file-header: EK Export v1
