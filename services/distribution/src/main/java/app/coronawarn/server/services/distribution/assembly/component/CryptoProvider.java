@@ -25,7 +25,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
-import java.nio.file.Files;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
@@ -33,14 +32,16 @@ import java.security.NoSuchProviderException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.Security;
-import java.security.cert.Certificate;
-import java.security.cert.CertificateException;
-import java.security.cert.CertificateFactory;
+import java.security.interfaces.ECPublicKey;
+import java.security.spec.ECPoint;
+import java.security.spec.ECPublicKeySpec;
+import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
-import java.security.spec.X509EncodedKeySpec;
-import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
-import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
+import org.bouncycastle.jce.ECNamedCurveTable;
+import org.bouncycastle.jce.ECPointUtil;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.jce.spec.ECNamedCurveParameterSpec;
+import org.bouncycastle.jce.spec.ECNamedCurveSpec;
 import org.bouncycastle.openssl.PEMKeyPair;
 import org.bouncycastle.openssl.PEMParser;
 import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
@@ -55,65 +56,78 @@ import org.springframework.stereotype.Component;
 @Component
 public class CryptoProvider {
 
-  private final String privateKeyPath;
-
-  private final String publicKeyPath;
-
-  private final ResourceLoader resourceLoader;
-
-  private PrivateKey privateKey;
-  private PublicKey publicKey;
+  private final PrivateKey privateKey;
+  private final PublicKey publicKey;
 
   /**
-   * Creates a CryptoProvider, using {@link BouncyCastleProvider}.
+   * Creates a CryptoProvider.
    */
   CryptoProvider(ResourceLoader resourceLoader, DistributionServiceConfig distributionServiceConfig) {
-    this.resourceLoader = resourceLoader;
-    this.privateKeyPath = distributionServiceConfig.getPaths().getPrivateKey();
-    this.publicKeyPath = distributionServiceConfig.getPaths().getPublicKey();
-    Security.addProvider(new BouncyCastleProvider());
+    privateKey = loadPrivateKey(resourceLoader, distributionServiceConfig);
+    publicKey = loadPublicKey(resourceLoader, distributionServiceConfig);
+  }
+
+  private static PrivateKey getPrivateKeyFromStream(InputStream privateKeyStream) throws IOException {
+    InputStreamReader privateKeyStreamReader = new InputStreamReader(privateKeyStream);
+    Object parsed = new PEMParser(privateKeyStreamReader).readObject();
+    KeyPair pair = new JcaPEMKeyConverter().getKeyPair((PEMKeyPair) parsed);
+    return pair.getPrivate();
+  }
+
+  private static PublicKey getPublicKeyFromStream(InputStream certificateStream)
+      throws IOException, NoSuchAlgorithmException, InvalidKeySpecException, NoSuchProviderException {
+    return getPublicKeyFromBytes(certificateStream.readAllBytes());
+  }
+
+  private static PublicKey getPublicKeyFromBytes(byte[] bytes)
+      throws NoSuchAlgorithmException, InvalidKeySpecException {
+    /*
+    ECNamedCurveParameterSpec spec = ECNamedCurveTable.getParameterSpec("prime256v1");
+    KeyFactory kf = KeyFactory.getInstance("ECDSA", new BouncyCastleProvider());
+    ECNamedCurveSpec params = new ECNamedCurveSpec("prime256v1", spec.getCurve(), spec.getG(), spec.getN());
+    ECPoint point =  ECPointUtil.decodePoint(params.getCurve(), bytes);
+    ECPublicKeySpec pubKeySpec = new ECPublicKeySpec(point, params);
+    return kf.generatePublic(pubKeySpec);
+    */
+
+    KeyFactory kf = KeyFactory.getInstance("ECDSA", new BouncyCastleProvider());
+    InputStream certificateByteStream = new ByteArrayInputStream(bytes);
+    return kf.generatePublic(certificateByteStream);
   }
 
   /**
-   * Reads and returns the {@link PrivateKey} configured in the application properties.
+   * Returns the {@link PrivateKey} configured in the application properties.
    */
   public PrivateKey getPrivateKey() {
-    if (privateKey == null) {
-      Resource privateKeyResource = resourceLoader.getResource(privateKeyPath);
-      try (InputStream privateKeyStream = privateKeyResource.getInputStream()) {
-      byte[] keyBytes = Files.readAllBytes(Paths.get(filename));
-
-      PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(keyBytes);
-      KeyFactory kf = KeyFactory.getInstance("RSA");
-      return kf.generatePrivate(spec);
-    }
     return privateKey;
   }
 
+  private PrivateKey loadPrivateKey(ResourceLoader resourceLoader,
+      DistributionServiceConfig distributionServiceConfig) {
+    String path = distributionServiceConfig.getPaths().getPrivateKey();
+    Resource privateKeyResource = resourceLoader.getResource(path);
+    try (InputStream privateKeyStream = privateKeyResource.getInputStream()) {
+      return getPrivateKeyFromStream(privateKeyStream);
+    } catch (IOException e) {
+      throw new UncheckedIOException("Failed to load private key from " + path, e);
+    }
+  }
+
   /**
-   * Reads and returns the {@link PublicKey} configured in the application properties.
+   * Returns the {@link PublicKey} configured in the application properties.
    */
   public PublicKey getPublicKey() {
-    if (publicKey == null) {
-      Resource publicKeyResource = resourceLoader.getResource(publicKeyPath);
-      try (InputStream publicKeyStream = publicKeyResource.getInputStream()) {
-        InputStreamReader publicKeyStreamReader = new InputStreamReader(publicKeyStream);
-        Object parsed = new PEMParser(publicKeyStreamReader).readObject();
-        SubjectPublicKeyInfo subjectPublicKeyInfo = (SubjectPublicKeyInfo) parsed;
-        X509EncodedKeySpec xspec = new X509EncodedKeySpec(subjectPublicKeyInfo.getEncoded());
-        AlgorithmIdentifier keyAlg = subjectPublicKeyInfo.getAlgorithm();
-
-        KeyFactory.getInstance(subjectPublicKeyInfo.getAlgorithm().toString(), "BC");
-
-        // publicKey = ((SubjectPublicKeyInfo) parsed).parsePublicKey().;
-      } catch (IOException e) {
-        throw new UncheckedIOException("Failed to load private key from " + privateKeyPath, e);
-      } catch (NoSuchAlgorithmException e) {
-        e.printStackTrace();
-      } catch (NoSuchProviderException e) {
-        e.printStackTrace();
-      }
-    }
     return publicKey;
+  }
+
+  private PublicKey loadPublicKey(ResourceLoader resourceLoader, DistributionServiceConfig distributionServiceConfig) {
+    String path = distributionServiceConfig.getPaths().getPublicKey();
+    Resource publicKeyResource = resourceLoader.getResource(path);
+
+    try (InputStream privateKeyStream = publicKeyResource.getInputStream()) {
+      return getPublicKeyFromStream(privateKeyStream);
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to load private key from " + path, e);
+    }
   }
 }
